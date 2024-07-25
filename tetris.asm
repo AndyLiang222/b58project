@@ -49,6 +49,8 @@ ADDR_DSPL:
 # The address of the keyboard. Don't forget to connect it!
 ADDR_KBRD:
     .word 0xffff0000
+    
+Board: .space 200
 
 ##############################################################################
 # Mutable Data
@@ -64,7 +66,19 @@ ADDR_KBRD:
 	# Run the Tetris game.
 main:
     # Initialize the game
+	la    $t0, Board          # Load base address of the array into $t0
+   	li    $t1, 200           # Load the size of the array into $t1
+   	li    $t2, 0              # Initialize index to 0
 
+init_loop:
+    	beq   $t2, $t1, init_end       # If index equals size, exit loop
+    	sll   $t3, $t2, 2         # Multiply index by 4 (size of word) to get offset
+    	add   $t4, $t0, $t3       # Calculate address of array element
+    	sw    $zero, 0($t4)       # Store 0 at the calculated address
+    	addi  $t2, $t2, 1         # Increment index
+    	j     init_loop                # Jump to the beginning of the loop
+
+init_end:
 game_loop:
 	# 1a. Check if key has been pressed
     # 1b. Check which key has been pressed
@@ -74,6 +88,7 @@ game_loop:
 	li $s7, 0x0000ff        # $s7 = blue
 	li $s6, 0x17161A	 # $s6 = dark grey
 	li $s5, 0x454545	 # $s5 = light grey
+	li $s4, 0x00ffff	 # $s5 = light blue
 		
 	lw $s0, ADDR_DSPL       # $t0 = base address for display
 	addi $s0, $s0, 1064	 # move to the location of board
@@ -121,17 +136,25 @@ game_loop:
 	sw $s7, ($sp)
 	jal Draw_Row
 	
-	# draws checkerboard pattern
+	#Draws Board
+	
+	la $t0, Board
+	#draws line piece (Temporary - For Milestone 1)
+	sw $s4, 0($t0)
+	sw $s4, 4($t0)
+	sw $s4, 8($t0)
+	sw $s4, 12($t0)
 	
 	lw $s0, ADDR_DSPL       # $s0 = base address for display
 	addi $s0, $s0, 1064
 	addi $s1, $zero, 10
 	addi $s2, $zero, 20
+	la $s3, Board
 	
 	addi $t2, $zero, 0
 	li $t4, 0
-	BG_Row: 
-		beq $t2, $s2, BG_End_Row
+	Board_Row: 
+		beq $t2, $s2, Board_End_Row
 		xori $t4, $t4, 1
 		addi $t2, $t2, 1
 		addi $s0, $s0, 128
@@ -139,22 +162,40 @@ game_loop:
 		
 		
 		addi $t1, $zero, 0
-		BG_Col:
-			beq $t1, $s1, BG_Row
+		Board_Col:
+			
+			lw $t5, ($s3) 
+			beq $t1, $s1, Board_Row
 			addi $t1, $t1, 1
 			addi $t0, $t0, 4
+			beqz $t5, Empty_Space
+			sw $t5, ($t0)
+			j Board_Col_End
+			Empty_Space:
 			beqz $t4 Light_Gray_Square
-			xori $t4, $t4, 1
 			sw $s6, ($t0)
-			j BG_Col
+			j Board_Col_End
 			Light_Gray_Square: sw $s5, ($t0)
+			Board_Col_End: 
+			addi $s3, $s3, 4
 			xori $t4, $t4, 1
-			j BG_Col
-	BG_End_Row:
+			j Board_Col
+	Board_End_Row:
+	
+	
+	
+	
+	
 	# 4. Sleep
-
+	li   $a0, 33           # Load the number of seconds to sleep into $a0
+    	li   $v0, 32          # Syscall number for sleep (32)
+    	syscall               # Make the syscall to sleep
     #5. Go back to 1
     b game_loop
+    
+    
+    # Functions
+    
 	Draw_Row:
 		# t3 = color, t1 = length, t0 = starting position
 		lw $t3, ($sp)
