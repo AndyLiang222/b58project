@@ -49,8 +49,9 @@ ADDR_DSPL:
 # The address of the keyboard. Don't forget to connect it!
 ADDR_KBRD:
     .word 0xffff0000
-    
+
 Board: .space 200
+
 
 ##############################################################################
 # Mutable Data
@@ -104,11 +105,9 @@ game_loop:
 	
 	# draws the left edge of border
 	
-	addi $sp, $sp, -4
-	sw $s0, ($sp)
-	addi $sp, $sp, -4
-	sw $s2, ($sp)
-	addi $sp, $sp, -4
+	addi $sp, $sp, -12
+	sw $s0, 8($sp)
+	sw $s2, 4($sp)
 	sw $s7, ($sp)
 	jal Draw_Col
 	
@@ -116,11 +115,9 @@ game_loop:
 	
 	# draws the right edge of border
 	
-	addi $sp, $sp, -4
-	sw $s0, ($sp)
-	addi $sp, $sp, -4
-	sw $s2, ($sp)
-	addi $sp, $sp, -4
+	addi $sp, $sp, -12
+	sw $s0, 8($sp)
+	sw $s2, 4($sp)
 	sw $s7, ($sp)
 	jal Draw_Col
 	
@@ -128,11 +125,9 @@ game_loop:
 	
 	addi $s0, $s0, 2644
 	
-	addi $sp, $sp, -4
-	sw $s0, ($sp)
-	addi $sp, $sp, -4
-	sw $s1, ($sp)
-	addi $sp, $sp, -4
+	addi $sp, $sp, -12
+	sw $s0, 8($sp)
+	sw $s1, 4($sp)
 	sw $s7, ($sp)
 	jal Draw_Row
 	
@@ -145,66 +140,100 @@ game_loop:
 	sw $s4, 8($t0)
 	sw $s4, 12($t0)
 	
+	
+	
+	
 	lw $s0, ADDR_DSPL       # $s0 = base address for display
 	addi $s0, $s0, 1064
 	addi $s1, $zero, 10
 	addi $s2, $zero, 20
 	la $s3, Board
 	
+	addi $sp, $sp, -16
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	sw $s3, 12($sp)
+	
+	jal Draw_Board
+	
+	
+    # 4. Sleep
+	li   $a0, 33           # Load the number of seconds to sleep into $a0
+    	li   $v0, 32          # Syscall number for sleep (32)
+    	syscall               # Make the syscall to sleep
+
+    #5. Go back to 1
+    	b game_loop
+    
+    
+#Functions
+	
+Draw_Board:
+	# s0 = draw location, s1 = colums, s2 = rows, s3 = pointer of index 0 for board array
+	lw $s0, 0($sp)
+	lw $s1, 4($sp)
+	lw $s2, 8($sp)
+	lw $s3, 12($sp)
+	addi $sp, $sp, 16
+	
+	# colors
+	li $s7, 0x0000ff        # $s7 = blue
+	li $s6, 0x17161A	 # $s6 = dark grey
+	li $s5, 0x454545	 # $s5 = light grey
+	
+	#loops rows
+	# t2 is row index
 	addi $t2, $zero, 0
 	li $t4, 0
 	Board_Row: 
 		beq $t2, $s2, Board_End_Row
+		# flip t4, increment t2, shift s0 down one row, 
 		xori $t4, $t4, 1
 		addi $t2, $t2, 1
 		addi $s0, $s0, 128
-		addi $t0, $s0, 0
+		addi $t0, $s0, 0 # set t0 to s0 (s0 is the start location of the row)
 		
+		# t0 will be the location to draw
 		
+		# t1 is index for col
 		addi $t1, $zero, 0
 		Board_Col:
-			
-			lw $t5, ($s3) 
-			beq $t1, $s1, Board_Row
+			lw $t5, ($s3) #loads the value of array at current pos (Board[t2][t1])
+			beq $t1, $s1, Board_Row	# if end of the row, move to the next row
+			#increment t1 by 1
 			addi $t1, $t1, 1
+			#shift by one unit of display to the right
 			addi $t0, $t0, 4
+			# check if Board[t2][t1] is empty
 			beqz $t5, Empty_Space
+			# draw the color of Board[t2][t1]
 			sw $t5, ($t0)
 			j Board_Col_End
 			Empty_Space:
+			#if t4 = 1 draw Dark grey , else draw light grey
 			beqz $t4 Light_Gray_Square
 			sw $s6, ($t0)
 			j Board_Col_End
 			Light_Gray_Square: sw $s5, ($t0)
-			Board_Col_End: 
+			
+		Board_Col_End: 
+			# shifts pointer to next element of array
 			addi $s3, $s3, 4
+			# flip t4
 			xori $t4, $t4, 1
 			j Board_Col
-	Board_End_Row:
-	
-	
-	
-	
-	
-	# 4. Sleep
-	li   $a0, 33           # Load the number of seconds to sleep into $a0
-    	li   $v0, 32          # Syscall number for sleep (32)
-    	syscall               # Make the syscall to sleep
-    #5. Go back to 1
-    b game_loop
-    
-    
-    # Functions
-    
+
+	Board_End_Row: jr $ra
+
+
+
 	Draw_Row:
 		# t3 = color, t1 = length, t0 = starting position
-		lw $t3, ($sp)
-		addi $sp, $sp, 4
-		lw $t1, ($sp)
-		addi $sp, $sp, 4
-		lw $t0, ($sp)
-		addi $sp, $sp, 4
-		
+		lw $t3, 0($sp)
+		lw $t1, 4($sp)
+		lw $t0, 8($sp)
+		addi $sp, $sp, 12
 		Loop_Row:
 		beqz $t1, End_Row 
 		sw $t3, ($t0)
@@ -214,12 +243,10 @@ game_loop:
 		End_Row: jr $ra
 	Draw_Col:
 		# t3 = color, t1 = length, t0 = starting position
-		lw $t3, ($sp)
-		addi $sp, $sp, 4
-		lw $t1, ($sp)
-		addi $sp, $sp, 4
-		lw $t0, ($sp)
-		addi $sp, $sp, 4
+		lw $t3, 0($sp)
+		lw $t1, 4($sp)
+		lw $t0, 8($sp)
+		addi $sp, $sp, 12
 		Loop_Col:
 		beqz $t1, End_Col
 		sw $t3, ($t0)
