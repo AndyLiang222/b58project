@@ -194,6 +194,7 @@ game_loop:
 
 Lower_shape:	
 	# $t0 is the shape array
+	# $a0 must be set to the shape array
 	move $t0, $a0
 	
 	# Sleep
