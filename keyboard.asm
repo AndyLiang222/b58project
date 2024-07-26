@@ -15,7 +15,12 @@ main:
 	li 		$v0, 32
 	li 		$a0, 1
 	syscall
+	
+	li $t0, -8
+	li $t1, 10
+	div $t0, $t1
 
+	
     lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
     lw $t8, 0($t0)                  # Load first word from keyboard
     beq $t8, 1, keyboard_input      # If first word 1, key is pressed

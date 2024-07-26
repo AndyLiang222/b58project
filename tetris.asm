@@ -61,8 +61,22 @@ PLAYSTART:
 # left corner of the play area (not including borders)
 # IMPORTANT: Draw each shape starting from the top left corner,
 # posX will take care of centering it, as its set to 12 (center) by default
+pieceArray: .word 0:7
+curPiece: .word 4, 0x00ffff, 0, 4, 8, -4
+rLSHAPE:
+	.word 4, 0x0000ff, 0, 4, 8, -40
+lLSHAPE:
+	.word 4, 0xff7f00, 0, 4, 8, 40
+TSHAPE:
+	.word 4, 0x800080, 0, -4, 4, 40
+rZSHAPE:
+	.word 4, 0xff0000, 0, 4, 36, 40
+lZSHAPE:
+	.word 4, 0x00ff00, 0, -4, 40, 44
+SqSHAPE:
+	.word 4, 0xffff00, 0, 4, 40, 44
 ISHAPE:
-	.word 4, 0x00ffff, 0, 4, 8, 12
+	.word 4, 0x00ffff, 0, 4, 8, -4
 
 
 
@@ -74,8 +88,12 @@ Board: .word 0:200
 
 # posX and posY is position of the top left corner of the current block
 # posX and posY is relative to PLAYSTART
-posX: .word 12
-posY: .word 0
+posX: .word 16
+posY: .word 4
+
+speed: .word 20
+frameCount: .word 0
+keyboardBuffer: .word 
 
 ##############################################################################
 # Code
@@ -90,6 +108,27 @@ main:
 	la    $t0, Board          # Load base address of the array into $t0
    	li    $t1, 200           # Load the size of the array into $t1
    	li    $t2, 0              # Initialize index to 0
+	
+	la $s0, TSHAPE
+	la $s1, SqSHAPE
+	la $s2, lLSHAPE
+	la $s3, rLSHAPE
+	la $s4, lZSHAPE
+	la $s5, rZSHAPE
+	la $s6, ISHAPE
+	
+	la $t3, pieceArray
+	sw $s0, ($t3)
+	sw $s1, 4($t3)
+	sw $s2, 8($t3)
+	sw $s3, 12($t3)
+	sw $s4, 16($t3)
+	sw $s5, 20($t3)
+	sw $s6, 24($t3)
+	
+	#set cur piece to a random piece
+	
+	jal new_piece
 
 	j build_view
 	
@@ -143,7 +182,7 @@ build_view:
 game_loop:
 	
 	# must put which shape to draw in $a0
-	la $a0, ISHAPE
+	la $a0, curPiece
 	jal Draw_screen
 	
 	# READ A/D INPUT HRE
@@ -152,17 +191,78 @@ game_loop:
         lw $t8, 0($t0)                  # Load first word from keyboard
         beq $t8, 1, keyboard_input      # If first word 1, key is pressed
         
-        # must put which shape to draw in $a1
-	la $a1, ISHAPE
-	jal Lower_shape
+        # makes pieces drop at a cetain speed (easy feature 2)
+        
+        la $t0, frameCount
+        lw $t1, 0($t0)
+        la $t0, speed
+        lw $t2, 0($t0)
+        bne $t2, $t1, End_Drop
+        Drop:
+        	# lower the piece by one
+        	# must put which shape to draw in $a1
+		la $a1, curPiece
+		jal Lower_shape
+		# reset frame count in $t1
+		li $t1, 0
+		
+	End_Drop: 
+		# inc frame Count by one
+		addi $t1, $t1, 1
+		la $t0, frameCount
+        	sw $t1, 0($t0)
+        
+        # should be 60 fps
+	# Sleep
+	li   $a0, 16          # Load the number of miliseconds to sleep into $a0
+    	li   $v0, 32          # Syscall number for sleep (32)
+    	syscall               # Make the syscall to sleep
 	
     	j game_loop
-	
+# function to set the cur piece to the piece that is addressed in $t0
+set_cur_piece:
+	la $t1, curPiece
+	# loops through each element in the piece array and copies it from ($t0) to curPiece
+	li $t2, 0
+	li $t3, 6
+	set_loop:
+		beq $t2, $t3, end_set_loop
+		lw $t4, 0($t0)
+		sw $t4, 0($t1)
+		addi $t0, $t0, 4
+		addi $t1, $t1, 4
+		addi $t2, $t2, 1
+		j set_loop
+	end_set_loop: jr $ra
+
 #Functions
+new_piece:
+	# random number between 0-6 inclusive
+	li $v0, 42
+	li $a0, 0
+	li $a1, 7
+	syscall
+	# get the piece at index $a0
+	mul $a0, $a0, 4
+	la $t0, pieceArray
+	add $t0, $t0, $a0
+	lw $t0, 0($t0)
+	
+	# store our $ra
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	# set curPiece to random Piece
+	jal set_cur_piece
+	
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
 keyboard_input:                     # A key is pressed
 	lw $a0, 4($t0)                  # Load second word from keyboard
 	beq $a0, 0x61, respond_to_a     # Check if the key q was pressed
 	beq $a0, 0x64, respond_to_d
+	beq $a0, 0x77, respond_to_w
 	j game_loop
 
 # Remove a shape's data from Board, it just calls Add_shape
@@ -202,6 +302,67 @@ Remove_shape:
 	sw $t1, 4($a0)
 	jr $ra
 	
+
+# this function removes the current shape from the board
+# and updates the piece to rotate 90 degrees clockwise
+# the new shape is repainted
+
+rotate:
+	# takes in $a0 which is the piece array 
+	# store our $ra
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	# store our $a0
+	addi $sp, $sp, -4
+	sw $a0, 0($sp)
+	
+	jal Remove_shape
+
+	# load our $a0 back
+	lw $a0, 0($sp)
+	addi $sp, $sp, 4
+	# load our $ra to go back to game_loop
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	
+	li $t0, 0
+	lw $t1, 0($a0)
+	add $t2, $a0, 8
+	# loop through each unit of the piece
+	Rotate_Loop:
+		beq $t0, $t1, End_Rotate_Loop
+		lw $s0, 0($t2)
+		li $t5, -36
+		li $t6, 36
+		# there are two cases that mess up the rotate since the div doesn't does mod weirdly (-36 mod 10 = -6 and not 4)
+		beq $t5, $s0, edge_case_1
+		beq $t6, $s0, edge_case_2
+			# divides the value by 10 to get the offset y and offset x
+			li $s1, 10
+			div $s0, $s1
+			mfhi $s2 # x coordinate relative to pivot point
+			mflo $s3 # y coordinate relative to pivot point	
+			# x = -y and y = x will rotate it clockwise 90 degrees
+			sub $s3, $zero, $s3
+			# readd
+			mul $s4, $s2, 10
+			add $s4 , $s4, $s3
+			j Rotate_Inc
+		edge_case_1:
+			li $s4, 44
+			j Rotate_Inc
+		edge_case_2:
+			li $s4, -44
+			j Rotate_Inc
+		Rotate_Inc:
+			sw $s4, 0($t2)
+			addi $t2, $t2, 4
+			addi $t0, $t0, 1
+			j Rotate_Loop
+		
+		
+	End_Rotate_Loop: jr $ra
 
 # this function removes the current shape from the board
 # and updates posX, then it jumps to the game_loop where
@@ -244,14 +405,17 @@ move_horizontally:
 	jr $ra
 	
 respond_to_a:
-	la $a0, ISHAPE  ## TO BE CHANGED!! it is temporarily ISHAPE
+	la $a0, curPiece  ## TO BE CHANGED!! it is temporarily ISHAPE
 	addi $a1, $zero, -4
 	j move_horizontally
 
 respond_to_d:
-	la $a0, ISHAPE ## TO BE CHANGED!! it is temporarily ISHAPE
+	la $a0, curPiece ## TO BE CHANGED!! it is temporarily ISHAPE
 	addi $a1, $zero, 4
 	j move_horizontally
+respond_to_w:
+	la $a0, curPiece ## TO BE CHANGED!! it is temporarily ISHAPE
+	j rotate
 
 
 # this function calls Add_Shape and Draw_board together
@@ -293,10 +457,6 @@ Draw_screen:
 Lower_shape:	
 	# $a1 must be set to the shape array
 	
-	# Sleep
-	li   $a0, 1500           # Load the number of miliseconds to sleep into $a0
-    	li   $v0, 32          # Syscall number for sleep (32)
-    	syscall               # Make the syscall to sleep
 	
 	# Move the shape from Board
 	# we first have to remove it and then change posY
