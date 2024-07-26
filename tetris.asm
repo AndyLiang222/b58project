@@ -1,7 +1,7 @@
 #####################################################################
 # CSCB58 Summer 2024 Assembly Final Project - UTSC
-# Student1: Name, Student Number, UTorID, official email
-# Student2: Name, Student Number, UTorID, official email
+# Student1: Orion Chen, 1009972638, chenorio, orion.chen@mail.utoronto.ca
+# Student2: Andy Liang, Student Number, UTorID, official email
 #
 # Bitmap Display Configuration:
 # - Unit width in pixels: 8 (update this as needed) 
@@ -59,6 +59,8 @@ PLAYSTART:
 # the second is the hex code color
 # then the rest are the pixels to be coloured offset from PLAYSTART, the top
 # left corner of the play area (not including borders)
+# IMPORTANT: Draw each shape starting from the top left corner,
+# posX will take care of centering it, as its set to 12 (center) by default
 ISHAPE:
 	.word 4, 0x00ffff, 0, 4, 8, 12
 
@@ -91,17 +93,6 @@ main:
 
 	j build_view
 	
-init_loop:
-    	beq   $t2, $t1, init_end       # If index equals size, exit loop
-    	sll   $t3, $t2, 2         # Multiply index by 4 (size of word) to get offset
-    	add   $t4, $t0, $t3       # Calculate address of array element
-    	sw    $zero, 0($t4)       # Store 0 at the calculated address
-    	addi  $t2, $t2, 4         # Increment index
-    	j     init_loop                # Jump to the beginning of the loop
-
-init_end:
-	j build_view
-	
 build_view:
 	# 1a. Check if key has been pressed
 	# 1b. Check which key has been pressed
@@ -117,13 +108,6 @@ build_view:
 	addi $s0, $s0, 1064	 # move to the location of board
 	addi $s1, $zero, 12     # number of col
 	addi $s2, $zero, 22	 # number of rows
-	
-#	addi $sp, $sp, -4
-#	sw $s0, ($sp)
-#	sw $s1, ($sp)
-#	addi $sp, $sp, -4
-#	sw $s3, ($sp)
-#	jal Draw_Row
 	
 	# draws the left edge of border
 	
@@ -172,7 +156,6 @@ game_loop:
 	la $a1, ISHAPE
 	jal Lower_shape
 	
-    	
     	j game_loop
 	
 #Functions
