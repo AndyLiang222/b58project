@@ -4,8 +4,8 @@
 # Student2: Name, Student Number, UTorID, official email
 #
 # Bitmap Display Configuration:
-# - Unit width in pixels: 4 (update this as needed) 
-# - Unit height in pixels: 4 (update this as needed)
+# - Unit width in pixels: 8 (update this as needed) 
+# - Unit height in pixels: 8 (update this as needed)
 # - Display width in pixels: 256 (update this as needed)
 # - Display height in pixels: 256 (update this as needed)
 # - Base Address for Display: 0x10008000 ($gp)
@@ -49,7 +49,8 @@ ADDR_DSPL:
 # The address of the keyboard. Don't forget to connect it!
 ADDR_KBRD:
     .word 0xffff0000
-    
+   
+# the address of the top left corner of the playing field
 PLAYSTART:
 	.word 0x100084AC
 
@@ -59,7 +60,7 @@ PLAYSTART:
 # then the rest are the pixels to be coloured offset from PLAYSTART, the top
 # left corner of the play area (not including borders)
 ISHAPE:
-	.word 4, 0x00ffff, 12, 16, 20, 24
+	.word 4, 0x00ffff, 0, 4, 8, 12
 
 
 
@@ -67,9 +68,15 @@ ISHAPE:
 # Mutable Data
 ##############################################################################
 
+Board: .word 0:200
 
-posX: .word 1
-posY: .word 2
+# posX and posY is position of the top left corner of the current block
+# posX and posY is relative to PLAYSTART
+posX: .word 12
+posY: .word 0
+
+Speed: .word 48
+frameCount: .word 0
 
 ##############################################################################
 # Code
@@ -84,14 +91,15 @@ main:
 	la    $t0, Board          # Load base address of the array into $t0
    	li    $t1, 200           # Load the size of the array into $t1
    	li    $t2, 0              # Initialize index to 0
-	j init_loop
+
+	j build_view
 	
 init_loop:
     	beq   $t2, $t1, init_end       # If index equals size, exit loop
     	sll   $t3, $t2, 2         # Multiply index by 4 (size of word) to get offset
     	add   $t4, $t0, $t3       # Calculate address of array element
     	sw    $zero, 0($t4)       # Store 0 at the calculated address
-    	addi  $t2, $t2, 1         # Increment index
+    	addi  $t2, $t2, 4         # Increment index
     	j     init_loop                # Jump to the beginning of the loop
 
 init_end:
@@ -150,12 +158,149 @@ build_view:
 	
 	j game_loop
 
+# THE MAIN FUNCTION responsible for repainting the game and movement
 game_loop:
-	#Draws Board
-	# Draw ISHAPE for now
+	
+	# must put which shape to draw in $a0
 	la $a0, ISHAPE
-	lw $a1, posX
-	lw $a2, posY
+	jal Draw_screen
+	
+	# READ A/D INPUT HRE
+
+	lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
+        lw $t8, 0($t0)                  # Load first word from keyboard
+        beq $t8, 1, keyboard_input      # If first word 1, key is pressed
+        
+        la $t0, FrameCount
+        lw $t1, 0($t0)
+        la $t0, Speed
+        lw $t2, 0($t0)
+        bne $t2, $t1, No_Drop
+        Drop:
+        	# must put which shape to draw in $a1
+		la $a1, ISHAPE
+		jal Lower_shape
+	No_Drop: 
+		la $t0, FrameCount
+        	lw $t1, 0($t0)
+        	la $t0, Speed
+        	lw $t2, 0($t0)
+	
+	
+    	# Sleep
+	li   $a0, 100           # Load the number of miliseconds to sleep into $a0
+    	li   $v0, 32          # Syscall number for sleep (32)
+    	syscall               # Make the syscall to sleep
+    	
+    	j game_loop
+	
+#Functions
+keyboard_input:                     # A key is pressed
+	lw $a0, 4($t0)                  # Load second word from keyboard
+	beq $a0, 0x61, respond_to_a     # Check if the key q was pressed
+	beq $a0, 0x64, respond_to_d
+	j game_loop
+
+# Remove a shape's data from Board, it just calls Add_shape
+# except the colour is set to 0, so it acts as removing it
+Remove_shape:
+	# takes $a0 as the shape array
+	
+	# $t1 = shapes colour
+	lw $t1, 4($a0)
+
+	# store 0 in replacement of it
+	sw $zero, 4($a0)
+	
+	# arguments for Add_shape, $a0  stores shape array
+	la $a1, posX
+	lw $a1, 0($a1)
+	la $a2, posY
+	lw $a2, 0($a2)
+	
+	# save our arguments 
+	# store RA
+	
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	
+	# store the colour
+	sw $t1, 0($sp)
+	
+	
+	jal Add_Shape
+	lw $t1, 0($sp)
+	lw $ra, 4($sp)
+	
+	addi $sp, $sp, 8
+	
+	# set the original colour back
+	sw $t1, 4($a0)
+	jr $ra
+	
+
+# this function removes the current shape from the board
+# and updates posX, then it jumps to the game_loop where
+# the new shape is repainted
+move_horizontally:
+	# $a0 is the shape array
+	# a1 = -4/4 is the horizontal offset which is decided by the keystroke a/d 
+	
+	# store our $ra
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	# store our $a0
+	addi $sp, $sp, -4
+	sw $a0, 0($sp)
+	
+	# store our $a1
+	addi $sp, $sp, -4
+	sw $a1, 0($sp)
+	
+	jal Remove_shape
+	
+	# load our $a1 back
+	lw $a1, 0($sp)
+	addi $sp, $sp, 4
+	
+	# load our $a0 back
+	lw $a0, 0($sp)
+	addi $sp, $sp, 4
+	# load our $ra to go back to game_loop
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	
+	la $t0, posX
+	lw $t1, 0($t0)
+	# store the new updated posX
+	add $t1, $t1, $a1
+	sw $t1, 0($t0)
+	
+	jr $ra
+	
+respond_to_a:
+	la $a0, ISHAPE  ## TO BE CHANGED!! it is temporarily ISHAPE
+	addi $a1, $zero, -4
+	j move_horizontally
+
+respond_to_d:
+	la $a0, ISHAPE ## TO BE CHANGED!! it is temporarily ISHAPE
+	addi $a1, $zero, 4
+	j move_horizontally
+
+
+# this function calls Add_Shape and Draw_board together
+Draw_screen:
+	
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	#Draws Board
+	la $a1, posX
+	lw $a1, 0($a1)
+	la $a2, posY
+	lw $a2, 0($a2)
 
 	jal Add_Shape
 	
@@ -174,19 +319,43 @@ game_loop:
 	sw $s3, 12($sp)
 	
 	jal Draw_Board
-    # 4. Sleep
-	li   $a0, 33           # Load the number of seconds to sleep into $a0
-    	li   $v0, 32          # Syscall number for sleep (32)
-    	syscall               # Make the syscall to sleep
-
-    #5. Go back to 1
-    	b game_loop
 	
-#Functions
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
 
+# this function will remove the current shape from the board
+# and increment the posY by 4 to shift it down
+Lower_shape:	
+	# $a1 must be set to the shape array
+	
+	
+	
+	# Move the shape from Board
+	# we first have to remove it and then change posY
+	move $a0, $a1
 
+	# save our $ra
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	jal Remove_shape
+	
+	# get our $ra back
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	
+	# add 4 to posY
+	la $t0, posY
+	lw $t1, 0($t0)
+	addi $t1, $t1, 4
+	sw $t1, 0($t0)
+	
+	jr $ra
+
+# this function adds the current shape coordinates with respect to its
+# posY and posX into Board to prepare it for drawing
 Add_Shape:
-
 	# must set $a0 to the address of the shape array
 	# must set $a1 to posX
 	# must set $a2 to posY
@@ -220,16 +389,12 @@ Add_Shape:
 		
 		
 		# calculate offset due to posY
-		addi $t5, $zero, 128
+		addi $t5, $zero, 10
 		mult $t5, $a2
 		mflo $t5
 		
-		li $v0, 1
-		move $a0, $t5
-		syscall
 		# calculate offset due to posX
-		
-		
+		add $t5, $t5, $a1
 		
 		# add the color to the Board using calculated offset
 		# then restore the Board to its starting address
@@ -244,10 +409,8 @@ Add_Shape:
 		jr $ra
 	
 	
-	
-	
-	
-	
+# this functiond draws the board according to hex values in Board
+
 Draw_Board:
 	# s0 = draw location, s1 = colums, s2 = rows, s3 = pointer of index 0 for board array
 	lw $s0, 0($sp)
