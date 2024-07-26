@@ -49,7 +49,8 @@ ADDR_DSPL:
 # The address of the keyboard. Don't forget to connect it!
 ADDR_KBRD:
     .word 0xffff0000
-    
+   
+# the address of the top left corner of the playing field
 PLAYSTART:
 	.word 0x100084AC
 
@@ -59,7 +60,7 @@ PLAYSTART:
 # then the rest are the pixels to be coloured offset from PLAYSTART, the top
 # left corner of the play area (not including borders)
 ISHAPE:
-	.word 4, 0x00ffff, 12, 16, 20, 24
+	.word 4, 0x00ffff, 0, 4, 8, 12
 
 
 
@@ -67,9 +68,12 @@ ISHAPE:
 # Mutable Data
 ##############################################################################
 
-Board: .word 200
-posX: .word 1
-posY: .word 2
+Board: .word 0:200
+
+# posX and posY is position of the top left corner of the current block
+# posX and posY is relative to PLAYSTART
+posX: .word 12
+posY: .word 0
 
 ##############################################################################
 # Code
@@ -84,14 +88,15 @@ main:
 	la    $t0, Board          # Load base address of the array into $t0
    	li    $t1, 200           # Load the size of the array into $t1
    	li    $t2, 0              # Initialize index to 0
-	j init_loop
+
+	j build_view
 	
 init_loop:
     	beq   $t2, $t1, init_end       # If index equals size, exit loop
     	sll   $t3, $t2, 2         # Multiply index by 4 (size of word) to get offset
     	add   $t4, $t0, $t3       # Calculate address of array element
     	sw    $zero, 0($t4)       # Store 0 at the calculated address
-    	addi  $t2, $t2, 1         # Increment index
+    	addi  $t2, $t2, 4         # Increment index
     	j     init_loop                # Jump to the beginning of the loop
 
 init_end:
@@ -154,8 +159,10 @@ game_loop:
 	#Draws Board
 	# Draw ISHAPE for now
 	la $a0, ISHAPE
-	lw $a1, posX
-	lw $a2, posY
+	la $a1, posX
+	lw $a1, 0($a1)
+	la $a2, posY
+	lw $a2, 0($a2)
 
 	jal Add_Shape
 	
@@ -174,17 +181,73 @@ game_loop:
 	sw $s3, 12($sp)
 	
 	jal Draw_Board
-    # 4. Sleep
-	li   $a0, 33           # Load the number of seconds to sleep into $a0
-    	li   $v0, 32          # Syscall number for sleep (32)
-    	syscall               # Make the syscall to sleep
+	
+	la $a0, ISHAPE
+	jal Lower_shape
+    
+    	 
 
-    #5. Go back to 1
-    	b game_loop
+    	
+    	j game_loop
 	
 #Functions
 
+Lower_shape:	
+	# $t0 is the shape array
+	move $t0, $a0
+	
+	# Sleep
+	li   $a0, 1000           # Load the number of miliseconds to sleep into $a0
+    	li   $v0, 32          # Syscall number for sleep (32)
+    	syscall               # Make the syscall to sleep
+	
+	# Move the shape from Board
+	# we can reuse the Add_shape function, just set the color to 0
+	
 
+	
+	# $t1 = shapes colour
+	lw $t1, 4($t0)
+
+	# store 0 in replacement of it
+	sw $zero, 4($t0)
+	
+	# arguments for Add_shape, $a0 already stores shape array
+	move $a0, $t0
+	la $a1, posX
+	lw $a1, 0($a1)
+	la $a2, posY
+	lw $a2, 0($a2)
+	
+	# save our arguments 
+	# store RA
+	
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	
+	# store the colour
+	sw $t1, 0($sp)
+	
+	
+	jal Add_Shape
+	lw $t1, 0($sp)
+	lw $ra, 4($sp)
+	move $t0, $a0
+	
+	addi $sp, $sp, 8
+	
+	# set the original colour back
+	sw $t1, 4($t0)
+	
+	
+	# add 4 to posY
+	la $t0, posY
+	lw $t1, 0($t0)
+	addi $t1, $t1, 4
+	sw $t1, 0($t0)
+	
+	jr $ra
+	
 Add_Shape:
 
 	# must set $a0 to the address of the shape array
@@ -220,16 +283,12 @@ Add_Shape:
 		
 		
 		# calculate offset due to posY
-		addi $t5, $zero, 128
+		addi $t5, $zero, 10
 		mult $t5, $a2
 		mflo $t5
 		
-		li $v0, 1
-		move $a0, $t5
-		syscall
 		# calculate offset due to posX
-		
-		
+		add $t5, $t5, $a1
 		
 		# add the color to the Board using calculated offset
 		# then restore the Board to its starting address
