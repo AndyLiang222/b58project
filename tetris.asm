@@ -39,7 +39,7 @@
 
 ##############################################################################
 
-    .data
+.data
 ##############################################################################
 # Immutable Data
 ##############################################################################
@@ -49,13 +49,27 @@ ADDR_DSPL:
 # The address of the keyboard. Don't forget to connect it!
 ADDR_KBRD:
     .word 0xffff0000
+    
+PLAYSTART:
+	.word 0x100084AC
 
-Board: .space 200
+
+# for each shape array, the first element is the number of pixels to be coloured
+# the second is the hex code color
+# then the rest are the pixels to be coloured offset from PLAYSTART, the top
+# left corner of the play area (not including borders)
+ISHAPE:
+	.word 4, 0x00ffff, 12, 16, 20, 24
+
 
 
 ##############################################################################
 # Mutable Data
 ##############################################################################
+
+Board: .word 200
+posX: .word 1
+posY: .word 2
 
 ##############################################################################
 # Code
@@ -70,7 +84,8 @@ main:
 	la    $t0, Board          # Load base address of the array into $t0
    	li    $t1, 200           # Load the size of the array into $t1
    	li    $t2, 0              # Initialize index to 0
-
+	j init_loop
+	
 init_loop:
     	beq   $t2, $t1, init_end       # If index equals size, exit loop
     	sll   $t3, $t2, 2         # Multiply index by 4 (size of word) to get offset
@@ -80,10 +95,12 @@ init_loop:
     	j     init_loop                # Jump to the beginning of the loop
 
 init_end:
-game_loop:
+	j build_view
+	
+build_view:
 	# 1a. Check if key has been pressed
-    # 1b. Check which key has been pressed
-    # 2a. Check for collisions
+	# 1b. Check which key has been pressed
+	# 2a. Check for collisions
 	# 2b. Update locations (paddle, ball)
 	# 3. Draw the screen
 	li $s7, 0x0000ff        # $s7 = blue
@@ -131,18 +148,19 @@ game_loop:
 	sw $s7, ($sp)
 	jal Draw_Row
 	
+	j game_loop
+
+game_loop:
 	#Draws Board
-	
-	la $t0, Board
-	#draws line piece (Temporary - For Milestone 1)
-	sw $s4, 0($t0)
-	sw $s4, 4($t0)
-	sw $s4, 8($t0)
-	sw $s4, 12($t0)
-	
+	# Draw ISHAPE for now
+	la $a0, ISHAPE
+	lw $a1, posX
+	lw $a2, posY
+
+	jal Add_Shape
 	
 	
-	
+	# prepare to draw board
 	lw $s0, ADDR_DSPL       # $s0 = base address for display
 	addi $s0, $s0, 1064
 	addi $s1, $zero, 10
@@ -156,8 +174,6 @@ game_loop:
 	sw $s3, 12($sp)
 	
 	jal Draw_Board
-	
-	
     # 4. Sleep
 	li   $a0, 33           # Load the number of seconds to sleep into $a0
     	li   $v0, 32          # Syscall number for sleep (32)
@@ -165,9 +181,72 @@ game_loop:
 
     #5. Go back to 1
     	b game_loop
-    
-    
+	
 #Functions
+
+
+Add_Shape:
+
+	# must set $a0 to the address of the shape array
+	# must set $a1 to posX
+	# must set $a2 to posY
+	
+	# This method adds a shape's data to the Board array
+	# shape arrays are stored as 
+	# [n, c, i for i in range(n)]
+	# [pixels in shape, color, points to be drawn for i in range(pixels)]
+	# t2 = number of pixels in shape
+	# t3 = color of shape
+	
+	la $s3, Board
+	la $t0, PLAYSTART # load location of where the top left of playfield is
+	move $t1, $a0 # load the shape array
+	
+	# load the number of pixels and color
+	lw $t2, 0($t1) 
+	addi $t1, $t1, 4
+	lw $t3, 0($t1) 
+	addi $t1, $t1, 4
+	
+	j add_to_grid
+	add_to_grid:
+		beqz $t2, finished_adding
+		subi $t2, $t2, 1
+		
+		# get value of ISHAPE[i], the pixel to be added to the grid
+		lw $t4, 0($t1)
+		# increment array
+		addi $t1, $t1, 4
+		
+		
+		# calculate offset due to posY
+		addi $t5, $zero, 128
+		mult $t5, $a2
+		mflo $t5
+		
+		li $v0, 1
+		move $a0, $t5
+		syscall
+		# calculate offset due to posX
+		
+		
+		
+		# add the color to the Board using calculated offset
+		# then restore the Board to its starting address
+		add $t4, $t4, $t5
+		add $s3, $s3, $t4
+		sw $t3, 0($s3)
+		la $s3, Board
+		
+		j add_to_grid
+		
+	finished_adding:
+		jr $ra
+	
+	
+	
+	
+	
 	
 Draw_Board:
 	# s0 = draw location, s1 = colums, s2 = rows, s3 = pointer of index 0 for board array
