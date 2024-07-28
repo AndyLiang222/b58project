@@ -57,9 +57,8 @@ PLAYSTART:
 
 # for each shape array, the first element is the number of pixels to be coloured
 # the second is the hex code color
-# then the rest are the pixels to be coloured offset from PLAYSTART, the top
-# left corner of the play area (not including borders)
-# IMPORTANT: Draw each shape starting from the top left corner,
+# then the rest are the pixels to be coloured offset from the center
+# IMPORTANT: Draw each shape starting from the center
 # posX will take care of centering it, as its set to 12 (center) by default
 pieceArray: .word 0:7
 curPiece: .word 4, 0x00ffff, 0, 4, 8, -4
@@ -263,6 +262,8 @@ keyboard_input:                     # A key is pressed
 	beq $a0, 0x61, respond_to_a     # Check if the key q was pressed
 	beq $a0, 0x64, respond_to_d
 	beq $a0, 0x77, respond_to_w
+	beq $a0, 0x71, respond_to_q
+	beq $a0, 0x73, respond_to_s
 	j game_loop
 
 # Remove a shape's data from Board, it just calls Add_shape
@@ -405,19 +406,26 @@ move_horizontally:
 	jr $ra
 	
 respond_to_a:
-	la $a0, curPiece  ## TO BE CHANGED!! it is temporarily ISHAPE
+	la $a0, curPiece  
 	addi $a1, $zero, -4
 	j move_horizontally
 
 respond_to_d:
-	la $a0, curPiece ## TO BE CHANGED!! it is temporarily ISHAPE
+	la $a0, curPiece 
 	addi $a1, $zero, 4
 	j move_horizontally
 respond_to_w:
-	la $a0, curPiece ## TO BE CHANGED!! it is temporarily ISHAPE
+	la $a0, curPiece 
 	j rotate
-
-
+	
+respond_to_q:
+	li $v0, 10
+	syscall
+	
+respond_to_s:
+	
+	# drop the shape onto the board
+	
 # this function calls Add_Shape and Draw_board together
 Draw_screen:
 	
