@@ -225,6 +225,100 @@ game_loop:
     	syscall               # Make the syscall to sleep
 	
     	j game_loop
+
+
+# returns A % B
+mod:
+	lw $s0, 4($sp) # A
+	lw $s1, 0($sp) # B
+	addi $sp, $sp, 8
+	
+	div $s2, $s0, $s1
+	mul $s1, $s1, $s2
+	sub $s0, $s0, $s1
+	
+	addi $sp, $sp, -4
+	sw $s0, 0($sp)
+	
+	jr $ra
+	
+clear_line:
+	la $t0, Board
+	
+	# t2 holds the # of coloured squares, it initially starts at 0 which
+	# causes this function to run
+	
+	j loop_delete
+	loop_delete:
+		beqz $t2, end_delete
+		# decrease t2
+		subi $t2, $t2, 1
+			
+		# go back 1 square in Board and then set it to 0
+		subi $t0, $t0, 4
+		sw $zero, 0($t0)
+		j loop_delete
+	
+	end_delete:
+		move $t2, $zero
+		j loop_row
+	
+check_for_full_rows:
+	
+	addi $a0, $zero, 200
+	addi $a1, $zero, 40
+	addi $a2, $zero, 10
+	la $t0, Board
+	move $t1, $zero # for loop counter
+	move $t2, $zero # number of cells in the current row that are coloured
+	j check_row
+	
+	check_row:
+	
+		# if t
+		beq $a2, $t2, clear_line
+		move $t2, $zero
+		j loop_row
+
+		
+	loop_row:
+		lw $t3, 0($t0) # the colour of Board[i][j]
+		bnez $t3, inc_row
+		addi $t1, $t1, 4 # update for loop
+		addi $t0, $t0, 4 # move the array 
+		
+		
+		beq $a0, $t1, game_loop # if we have looped to the end of the board then go back
+		
+		
+		# check if we looped to the end of the row
+		# just need to see if counter % 40 == 0, which if it is,
+		# then we have started a new row
+		addi $sp, $sp, -4
+		sw $t1, 0($sp)
+		addi $sp, $sp, -4
+		sw $a1, 0($sp)
+		
+		jal mod
+		
+		lw $t4, 0($sp)
+		addi $sp, $sp, 4
+		beqz $t4, check_row
+		
+		# otherwise restart the loop
+		j loop_row
+		
+	inc_row:
+		# increment number of coloured squares in current row
+		addi $t2, 1
+		
+		# increment counter and array
+		addi $t1, $t1, 4
+		addi $t0, 4
+		j loop_row
+	
+	
+	
 # function to set the cur piece to the piece that is addressed in $t0
 set_cur_piece:
 	la $t1, curPiece
