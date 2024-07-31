@@ -60,6 +60,7 @@ PLAYSTART:
 # then the rest are the pixels to be coloured offset from the center
 # IMPORTANT: Draw each shape starting from the center
 # posX will take care of centering it, as its set to 12 (center) by default
+tempArray: .word 0:200
 pieceArray: .word 0:7
 curPiece: .word 4, 0x00ffff, 0, 4, 8, -4
 rLSHAPE:
@@ -124,6 +125,12 @@ main:
 	sw $s4, 16($t3)
 	sw $s5, 20($t3)
 	sw $s6, 24($t3)
+	
+	la $a0, lZSHAPE
+	li $a1, 16
+	li $a2, 72
+	jal Add_Shape
+	
 	
 	#set cur piece to a random piece
 	
@@ -323,9 +330,8 @@ rotate:
 	# load our $a0 back
 	lw $a0, 0($sp)
 	addi $sp, $sp, 4
-	# load our $ra to go back to game_loop
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
+	
+	la $s7, tempArray
 	
 	li $t0, 0
 	lw $t1, 0($a0)
@@ -334,6 +340,10 @@ rotate:
 	Rotate_Loop:
 		beq $t0, $t1, End_Rotate_Loop
 		lw $s0, 0($t2)
+		
+		sw $s0, 0($s7)
+		addi $s7, $s7, 4
+		
 		li $t5, -36
 		li $t6, 36
 		# there are two cases that mess up the rotate since the div doesn't does mod weirdly (-36 mod 10 = -6 and not 4)
@@ -363,7 +373,74 @@ rotate:
 			j Rotate_Loop
 		
 		
-	End_Rotate_Loop: jr $ra
+	End_Rotate_Loop: 
+	
+	jal Check_Rotate_Collision
+	beqz $v0, Rotate_Piece_End
+	lw $t0, 0($a0)
+	la $s1, tempArray
+	add $t2, $a0, 8
+	Reset_Rotate_Loop:
+		beqz $t0, Rotate_Piece_End
+		lw $s0, 0($s1)
+		sw $s0, 0($t2)
+		addi $t2, $t2, 4
+		addi $s1, $s1, 4
+		subi $t0, $t0, 1
+		j Reset_Rotate_Loop
+	
+	Rotate_Piece_End:
+	# load our $ra to go back to game_loop
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+
+Check_Rotate_Collision:
+
+	la $s0, curPiece
+	lw $s1, 0($s0)
+	addi $s2, $s0, 8
+	
+	li $s7, 0
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	jal Get_Position
+	move $s3, $v0
+
+
+	Loop_Piece_Rotate:
+		beqz $s1, Loop_Piece_Rotate_End
+		
+		lw $s4, 0($s2)
+		add $s5, $s3, $s4
+
+	
+		addi $sp, $sp, -4
+		sw $s5, 0($sp)
+		addi $sp, $sp, -4
+		sw $s3, 0($sp)
+		jal Check_Wall_Collision
+		or $s7, $s7, $v0
+		
+		addi $sp, $sp, -4
+		sw $s5, 0($sp)
+		jal Check_Board_Collision
+		or $s7, $s7, $v0
+		
+		addi $sp, $sp, -4
+		sw $s5, 0($sp)
+		jal Check_Floor_Collision
+		or $s7, $s7, $v0
+		
+		bnez $s7, Loop_Piece_Rotate_End
+		subi $s1, $s1, 1
+		addi $s2, $s2, 4
+		j Loop_Piece_Rotate
+		
+	Loop_Piece_Rotate_End: add $v0, $zero, $s7
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	j ret
 
 # this function removes the current shape from the board
 # and updates posX, then it jumps to the game_loop where
@@ -393,9 +470,7 @@ move_horizontally:
 	# load our $a0 back
 	lw $a0, 0($sp)
 	addi $sp, $sp, 4
-	# load our $ra to go back to game_loop
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
+	
 	
 	la $t0, posX
 	lw $t1, 0($t0)
@@ -403,8 +478,64 @@ move_horizontally:
 	add $t1, $t1, $a1
 	sw $t1, 0($t0)
 	
-	jr $ra
+	addi $sp, $sp, -4
+	sw $a1, 0($sp)
 	
+	jal Check_Horizontal_Collision
+	beqz $v0, Move_Horizontal_End
+	
+	la $t0, posX
+	lw $t1, 0($t0)
+	# store the new updated posX
+	sub $t1, $t1, $a1
+	sw $t1, 0($t0)
+	
+	Move_Horizontal_End:
+	# load our $ra to go back to game_loop
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+
+Check_Horizontal_Collision:
+	lw $s6, 0($sp)
+	addi $sp, $sp, 4
+
+	la $s0, curPiece
+	lw $s1, 0($s0)
+	addi $s2, $s0, 8
+	li $s7, 0
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	jal Get_Position
+	move $s3, $v0
+
+	Loop_Piece_Horrizontal:
+		beqz $s1, Loop_Piece_Horrizontal_End
+		lw $s4, 0($s2)
+		add $s5, $s3, $s4
+		
+		addi $sp, $sp, -4
+		sw $s5, 0($sp)
+		sub $t8, $s5, $s6
+		addi $sp, $sp, -4
+		sw $t8, 0($sp)
+		
+		jal Check_Wall_Collision
+		or $s7, $s7, $v0
+		addi $sp, $sp, -4
+		sw $s5, 0($sp)
+		jal Check_Board_Collision
+		or $s7, $s7, $v0
+		bnez $s7, Loop_Piece_Horrizontal_End
+		subi $s1, $s1, 1
+		addi $s2, $s2, 4
+		j Loop_Piece_Horrizontal
+		
+	Loop_Piece_Horrizontal_End: add $v0, $zero, $s7
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	j ret
+
 respond_to_a:
 	la $a0, curPiece  
 	addi $a1, $zero, -4
@@ -476,18 +607,124 @@ Lower_shape:
 	
 	jal Remove_shape
 	
-	# get our $ra back
-	lw $ra, 0($sp)
-	addi $sp, $sp, 4
-	
 	# add 4 to posY
 	la $t0, posY
 	lw $t1, 0($t0)
 	addi $t1, $t1, 4
 	sw $t1, 0($t0)
 	
+	
+	jal Check_Drop_Collision
+	
+	beqz $v0, End_Lower_Piece
+	
+	# subtract 4 to posY
+	la $t0, posY
+	lw $t1, 0($t0)
+	subi $t1, $t1, 4
+	sw $t1, 0($t0)
+	
+	End_Lower_Piece:
+	# get our $ra back
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	
+	
+	
 	jr $ra
 
+Check_Wall_Collision:
+	#previous position
+	lw $t0, 0($sp)
+	# new position
+	lw $t1, 4($sp)
+	addi $sp, $sp, 8
+	div $t2, $t0, 40
+	div $t3, $t1, 40
+	li $v0, 0
+	beq $t2, $t3, ret
+	sub $t4, $t1, $t0
+	bgez $t4, Not_Negative_Wall_Collision
+	sub $t4, $zero, $t4
+	Not_Negative_Wall_Collision:
+	bge $t4, 20, ret
+	li $v0, 1
+	j ret
+
+Check_Floor_Collision:
+	lw $t0, 0($sp)
+	addi $sp, $sp, 4
+	div $t1, $t0, 40
+	li $v0, 1
+	bge $t1, 20, ret
+	li $v0, 0
+	j ret
+
+Check_Board_Collision:
+	lw $t0, 0($sp)
+	addi $sp, $sp, 4
+	
+	
+	
+	la $t1, Board
+	add $t1, $t1, $t0
+	
+	
+	
+	lw $t2, 0($t1)
+	li $v0, 0
+	beqz $t2, ret
+	li $v0, 1
+	j ret
+
+Check_Drop_Collision:
+	la $s0, curPiece
+	lw $s1, 0($s0)
+	addi $s2, $s0, 8
+	li $s7, 0
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	jal Get_Position
+	move $s3, $v0
+
+	Loop_Piece:
+		beqz $s1, Loop_Piece_End
+		lw $s4, 0($s2)
+		add $s5, $s3, $s4
+		addi $sp, $sp, -4
+		sw $s5, 0($sp)
+		jal Check_Floor_Collision
+		or $s7, $s7, $v0
+		addi $sp, $sp, -4
+		sw $s5, 0($sp)
+		jal Check_Board_Collision
+		or $s7, $s7, $v0
+		bnez $s7, Loop_Piece_End
+		subi $s1, $s1, 1
+		addi $s2, $s2, 4
+		j Loop_Piece
+		
+	Loop_Piece_End: add $v0, $zero, $s7
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	j ret
+	
+
+Get_Position:
+
+	
+	la $t0, posY
+	lw $t1, 0($t0)
+	la $t0, posX
+	lw $t2, 0($t0)
+	mul $t1, $t1, 10
+	add $t1, $t1, $t2
+
+	move $v0, $t1
+	j ret
+
+
+ret: jr $ra
 # this function adds the current shape coordinates with respect to its
 # posY and posX into Board to prepare it for drawing
 Add_Shape:
