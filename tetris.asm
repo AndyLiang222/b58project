@@ -225,6 +225,107 @@ game_loop:
     	syscall               # Make the syscall to sleep
 	
     	j game_loop
+    	
+
+# returns A % B
+mod:
+	lw $s0, 4($sp) # A
+	lw $s1, 0($sp) # B
+	addi $sp, $sp, 8
+
+	div $s2, $s0, $s1
+	mul $s1, $s1, $s2
+	sub $s0, $s0, $s1
+
+	addi $sp, $sp, -4
+	sw $s0, 0($sp)
+
+	jr $ra
+
+clear_line:
+	la $s0, Board
+	lw $s1, 0($sp) # start of row to clear
+	addi $sp, $sp, 4
+	# t2 holds the # of coloured squares, it initially starts at 0 which
+	# causes this function to run
+
+	j loop_delete
+	loop_delete:
+		beq $s0, $s1 , end_delete
+		subi $s1, $s1, 4
+		lw $s2, 0($s1)
+		sw $s2, 40($s1)
+
+		# go to next square in board
+		
+		j loop_delete
+
+	end_delete:
+		j ret
+
+check_for_full_rows:
+	
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	addi $a0, $zero, 800
+	addi $a1, $zero, 40
+	addi $a2, $zero, 10
+	la $t0, Board
+	move $t5, $t0
+	move $t1, $zero # for loop counter
+	move $t2, $zero # number of cells in the current row that are coloured
+	j loop_row
+
+	check_row:
+
+		# if t
+		bne $a2, $t2, no_clear_line
+		addi $sp, $sp, -4
+		sw $t5, 0($sp)
+		jal clear_line
+		no_clear_line:
+		move $t2, $zero
+		move $t5, $t0
+		beq $a0, $t1, End_Check_Full_Rows # if we have looped to the end of the board then go back
+		j loop_row
+
+
+	loop_row:
+		lw $t3, 0($t0) # the colour of Board[i][j]
+		beqz $t3, empty_square
+		
+		# increment number of coloured squares in current row
+		addi $t2, $t2, 1
+		empty_square:
+		addi $t1, $t1, 4 # update for loop
+		addi $t0, $t0, 4 # move the array 
+
+
+		
+
+		# check if we looped to the end of the row
+		# just need to see if counter % 40 == 0, which if it is,
+		# then we have started a new row
+		addi $sp, $sp, -4
+		sw $t1, 0($sp)
+		addi $sp, $sp, -4
+		sw $a1, 0($sp)
+
+		jal mod
+
+		lw $t4, 0($sp)
+		addi $sp, $sp, 4
+		beqz $t4, check_row
+
+		# otherwise restart the loop
+		j loop_row
+   	
+    	End_Check_Full_Rows:
+    		lw $ra, 0($sp)
+    		addi $sp, $sp, 4
+    		j ret
+
 # function to set the cur piece to the piece that is addressed in $t0
 set_cur_piece:
 	la $t1, curPiece
@@ -554,7 +655,13 @@ respond_to_q:
 	syscall
 	
 respond_to_s:
-	
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	la $a1, curPiece
+	jal Lower_shape
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
 	# drop the shape onto the board
 	
 # this function calls Add_Shape and Draw_board together
@@ -616,6 +723,8 @@ Lower_shape:
 	
 	jal Check_Drop_Collision
 	
+	
+	
 	beqz $v0, End_Lower_Piece
 	
 	# subtract 4 to posY
@@ -624,7 +733,27 @@ Lower_shape:
 	subi $t1, $t1, 4
 	sw $t1, 0($t0)
 	
+	# add shape back to Board
+	la $a0, curPiece
+	la $a1, posX
+	lw $a1, 0($a1)
+	la $a2, posY
+	lw $a2, 0($a2)
+	
+	jal Add_Shape
+	
+	li $t0, 16
+	li $t1, 4
+	la $a1, posX
+	sw $t0, 0($a1)
+	la $a2, posY
+	sw $t1, 0($a2)
+	jal new_piece
+	
+	jal check_for_full_rows
+	
 	End_Lower_Piece:
+	
 	# get our $ra back
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
