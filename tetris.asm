@@ -96,6 +96,7 @@ savedPosX: .word 8
 savedPosY: .word 8
 posX: .word 16
 posY: .word 4
+savedUsed: .word 0
 
 speed: .word 20
 frameCount: .word 0
@@ -182,6 +183,33 @@ build_view:
 	sw $s7, ($sp)
 	jal Draw_Row
 	
+	lw $s0, ADDR_DSPL       # $t0 = base address for display
+	addi $s0, $s0, 1112	 # move to the location of board
+	addi $s1, $zero, 6     # number of col
+	addi $s2, $zero, 7
+	
+	addi $sp, $sp, -12
+	sw $s0, 8($sp)
+	sw $s1, 4($sp)
+	sw $s7, ($sp)
+	jal Draw_Row
+	
+	addi $s0, $s0, 20
+	
+	addi $sp, $sp, -12
+	sw $s0, 8($sp)
+	sw $s2, 4($sp)
+	sw $s7, ($sp)
+	jal Draw_Col
+	
+	addi $s0, $s0, 748
+	
+	addi $sp, $sp, -12
+	sw $s0, 8($sp)
+	sw $s1, 4($sp)
+	sw $s7, ($sp)
+	jal Draw_Row
+	
 	j game_loop
 
 # THE MAIN FUNCTION responsible for repainting the game and movement
@@ -243,6 +271,12 @@ mod:
 	jr $ra
 
 save_piece:
+	la $t0, savedUsed
+	lw $t1, 0($t0)
+	bnez $t1, ret
+	li $t2, 1
+	sw $t2, 0($t0)
+	
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
 	
@@ -263,6 +297,7 @@ save_piece:
 	
 	beqz $t1, no_saved_piece
 	
+	la $a0, curPiece
 	jal Remove_shape_saved
 	
 	j end_saved_piece
@@ -472,7 +507,7 @@ Remove_shape_saved:
 	# takes $a0 as the shape array
 	
 	# $t1 = shapes colour
-	la $a0, savedPiece
+
 	lw $t1, 4($a0)
 
 	# store 0 in replacement of it
@@ -772,6 +807,7 @@ Draw_screen:
 	sw $ra, 0($sp)
 	
 	#Draws Board
+	la $a0, savedPiece
 	la $a1, savedPosX
 	lw $a1, 0($a1)
 	la $a2, savedPosY
@@ -780,6 +816,7 @@ Draw_screen:
 	jal Add_Shape_Saved
 	
 	#Draws Board
+	la $a0, curPiece
 	la $a1, posX
 	lw $a1, 0($a1)
 	la $a2, posY
@@ -875,6 +912,9 @@ Lower_shape:
 	sw $t0, 0($a1)
 	la $a2, posY
 	sw $t1, 0($a2)
+	li $t1, 0
+	la $a1, savedUsed
+	sw $t1, 0($a1)
 	jal new_piece
 	
 	jal check_for_full_rows
@@ -1049,7 +1089,7 @@ Add_Shape_Saved:
 	
 	la $s3, savedBoard
 	la $t0, PLAYSTART # load location of where the top left of playfield is
-	la $t1, savedPiece
+	move $t1, $a0
 	
 	# load the number of pixels and color
 	lw $t2, 0($t1) 
