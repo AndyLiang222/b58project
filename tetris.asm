@@ -17,8 +17,10 @@
 # Which approved features have been implemented?
 # (See the assignment handout for the list of features)
 # Easy Features:
-# 1. (fill in the feature, if any)
-# 2. (fill in the feature, if any)
+# 1. Gravity
+# 2. Gravity increases over the number of rows completed
+# 3. Each Tetrimino is a different color
+# 4. Save Feature for pieces
 # ... (add more if necessary)
 # Hard Features:
 # 1. (fill in the feature, if any)
@@ -63,6 +65,7 @@ PLAYSTART:
 tempArray: .word 0:200
 pieceArray: .word 0:7
 curPiece: .word 4, 0x00ffff, 0, 4, 8, -4
+savedPiece: .word 4, 0x800080, 0, -4, 4, 40
 rLSHAPE:
 	.word 4, 0x0000ff, 0, 4, 8, -40
 lLSHAPE:
@@ -85,9 +88,12 @@ ISHAPE:
 ##############################################################################
 
 Board: .word 0:200
+savedBoard: .word 0:200
 
 # posX and posY is position of the top left corner of the current block
 # posX and posY is relative to PLAYSTART
+savedPosX: .word 8
+savedPosY: .word 8
 posX: .word 16
 posY: .word 4
 
@@ -125,12 +131,6 @@ main:
 	sw $s4, 16($t3)
 	sw $s5, 20($t3)
 	sw $s6, 24($t3)
-	
-	la $a0, lZSHAPE
-	li $a1, 16
-	li $a2, 72
-	jal Add_Shape
-	
 	
 	#set cur piece to a random piece
 	
@@ -242,6 +242,42 @@ mod:
 
 	jr $ra
 
+save_piece:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	la $a0, curPiece
+	jal Remove_shape
+	
+	li $t0, 16
+	li $t1, 4
+	la $a1, posX
+	sw $t0, 0($a1)
+	la $a2, posY
+	sw $t1, 0($a2)
+	
+	jal swap_cur_piece
+	
+	la $t0, curPiece
+	lw $t1, 4($t0)
+	
+	beqz $t1, no_saved_piece
+	
+	jal Remove_shape_saved
+	
+	j end_saved_piece
+	
+	
+	no_saved_piece:
+	# sets the savedPiece to the curPiece
+	
+	jal new_piece
+	
+	end_saved_piece:
+	lw $ra, 0($sp)
+    	addi $sp, $sp, 4
+    	j ret
+
 clear_line:
 	la $s0, Board
 	lw $s1, 0($sp) # start of row to clear
@@ -342,6 +378,24 @@ set_cur_piece:
 		j set_loop
 	end_set_loop: jr $ra
 
+swap_cur_piece:
+	la $t1, curPiece
+	la $t5, savedPiece
+	# loops through each element in the piece array and copies it from ($t0) to curPiece
+	li $t2, 0
+	li $t3, 6
+	swap_loop:
+		beq $t2, $t3, end_swap_loop
+		lw $t4, 0($t5)
+		lw $t6, 0($t1)
+		sw $t4, 0($t1)
+		sw $t6, 0($t5)
+		addi $t1, $t1, 4
+		addi $t5, $t5, 4
+		addi $t2, $t2, 1
+		j swap_loop
+	end_swap_loop: jr $ra
+
 #Functions
 new_piece:
 	# random number between 0-6 inclusive
@@ -372,6 +426,7 @@ keyboard_input:                     # A key is pressed
 	beq $a0, 0x77, respond_to_w
 	beq $a0, 0x71, respond_to_q
 	beq $a0, 0x73, respond_to_s
+	beq $a0, 0x63, respond_to_c
 	j game_loop
 
 # Remove a shape's data from Board, it just calls Add_shape
@@ -411,6 +466,43 @@ Remove_shape:
 	sw $t1, 4($a0)
 	jr $ra
 	
+# Remove a shape's data from Board, it just calls Add_shape
+# except the colour is set to 0, so it acts as removing it
+Remove_shape_saved:
+	# takes $a0 as the shape array
+	
+	# $t1 = shapes colour
+	la $a0, savedPiece
+	lw $t1, 4($a0)
+
+	# store 0 in replacement of it
+	sw $zero, 4($a0)
+	
+	# arguments for Add_shape, $a0  stores shape array
+	la $a1, savedPosX
+	lw $a1, 0($a1)
+	la $a2, savedPosY
+	lw $a2, 0($a2)
+	
+	# save our arguments 
+	# store RA
+	
+	addi $sp, $sp, -8
+	sw $ra, 4($sp)
+	
+	# store the colour
+	sw $t1, 0($sp)
+	
+	
+	jal Add_Shape_Saved
+	lw $t1, 0($sp)
+	lw $ra, 4($sp)
+	
+	addi $sp, $sp, 8
+	
+	# set the original colour back
+	sw $t1, 4($a0)
+	jr $ra
 
 # this function removes the current shape from the board
 # and updates the piece to rotate 90 degrees clockwise
@@ -664,11 +756,28 @@ respond_to_s:
 	jr $ra
 	# drop the shape onto the board
 	
+respond_to_c:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+
+	jal save_piece
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
 # this function calls Add_Shape and Draw_board together
 Draw_screen:
 	
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
+	
+	#Draws Board
+	la $a1, savedPosX
+	lw $a1, 0($a1)
+	la $a2, savedPosY
+	lw $a2, 0($a2)
+
+	jal Add_Shape_Saved
 	
 	#Draws Board
 	la $a1, posX
@@ -686,11 +795,29 @@ Draw_screen:
 	addi $s2, $zero, 20
 	la $s3, Board
 	
-	addi $sp, $sp, -16
+	addi $sp, $sp, -20
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
 	sw $s2, 8($sp)
 	sw $s3, 12($sp)
+	sw $zero, 16($sp)
+	
+	jal Draw_Board
+	
+	# prepare to draw saved board
+	lw $s0, ADDR_DSPL       # $s0 = base address for display
+	addi $s0, $s0, 1108
+	addi $s1, $zero, 5
+	addi $s2, $zero, 5
+	la $s3, savedBoard
+	
+	addi $sp, $sp, -20
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	sw $s3, 12($sp)
+	li $s4, 20
+	sw $s4, 16($sp)
 	
 	jal Draw_Board
 	
@@ -908,20 +1035,78 @@ Add_Shape:
 		
 	finished_adding:
 		jr $ra
+
+Add_Shape_Saved:
+	# must set $a1 to posX
+	# must set $a2 to posY
 	
+	# This method adds a shape's data to the Board array
+	# shape arrays are stored as 
+	# [n, c, i for i in range(n)]
+	# [pixels in shape, color, points to be drawn for i in range(pixels)]
+	# t2 = number of pixels in shape
+	# t3 = color of shape
+	
+	la $s3, savedBoard
+	la $t0, PLAYSTART # load location of where the top left of playfield is
+	la $t1, savedPiece
+	
+	# load the number of pixels and color
+	lw $t2, 0($t1) 
+	addi $t1, $t1, 4
+	lw $t3, 0($t1) 
+	addi $t1, $t1, 4
+	
+	j add_to_grid_saved
+	add_to_grid_saved:
+		beqz $t2, finished_adding_saved
+		subi $t2, $t2, 1
+		
+		# get value of ISHAPE[i], the pixel to be added to the grid
+		lw $t4, 0($t1)
+		# increment array
+		addi $t1, $t1, 4
+		
+		
+		# calculate offset due to posY
+		addi $t5, $zero, 10
+		mult $t5, $a2
+		mflo $t5
+		
+		# calculate offset due to posX
+		add $t5, $t5, $a1
+		
+		# add the color to the Board using calculated offset
+		# then restore the Board to its starting address
+		add $t4, $t4, $t5
+		add $s3, $s3, $t4
+		sw $t3, 0($s3)
+		la $s3, savedBoard
+		
+		j add_to_grid_saved
+		
+	finished_adding_saved:
+		jr $ra
+
 	
 # this functiond draws the board according to hex values in Board
 
 Draw_Board:
-	# s0 = draw location, s1 = colums, s2 = rows, s3 = pointer of index 0 for board array
+	# s0 = draw location, s1 = columns, s2 = rows, s3 = pointer of index 0 for board array
 	lw $s0, 0($sp)
 	lw $s1, 4($sp)
-	lw $s2, 8($sp)
+	lw $s2, 8($sp) 
 	lw $s3, 12($sp)
-	addi $sp, $sp, 16
+	lw $s7, 16($sp)
+	addi $sp, $sp, 20
+	li $t4, 2
+	
+	div $s1, $t4
+	mfhi $s4
+	xor $s4, $s4, 1
 	
 	# colors
-	li $s7, 0x0000ff        # $s7 = blue
+
 	li $s6, 0x17161A	 # $s6 = dark grey
 	li $s5, 0x454545	 # $s5 = light grey
 	
@@ -932,7 +1117,7 @@ Draw_Board:
 	Board_Row: 
 		beq $t2, $s2, Board_End_Row
 		# flip t4, increment t2, shift s0 down one row, 
-		xori $t4, $t4, 1
+		xor $t4, $t4, $s4
 		addi $t2, $t2, 1
 		addi $s0, $s0, 128
 		addi $t0, $s0, 0 # set t0 to s0 (s0 is the start location of the row)
@@ -943,7 +1128,7 @@ Draw_Board:
 		addi $t1, $zero, 0
 		Board_Col:
 			lw $t5, ($s3) #loads the value of array at current pos (Board[t2][t1])
-			beq $t1, $s1, Board_Row	# if end of the row, move to the next row
+			beq $t1, $s1, Board_Row_End	# if end of the row, move to the next row
 			#increment t1 by 1
 			addi $t1, $t1, 1
 			#shift by one unit of display to the right
@@ -966,8 +1151,12 @@ Draw_Board:
 			# flip t4
 			xori $t4, $t4, 1
 			j Board_Col
-
+		Board_Row_End:
+			add $s3, $s3, $s7
+			j Board_Row
 	Board_End_Row: jr $ra
+
+
 
 
 
