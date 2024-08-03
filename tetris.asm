@@ -23,8 +23,8 @@
 # 4. Save Feature for pieces
 # ... (add more if necessary)
 # Hard Features:
-# 1. (fill in the feature, if any)
-# 2. (fill in the feature, if any)
+# 1. Full set of Tetriminos
+# 2. Tetris Theme Song
 # ... (add more if necessary)
 # How to play:
 # (Include any instructions)
@@ -65,7 +65,7 @@ PLAYSTART:
 tempArray: .word 0:200
 pieceArray: .word 0:7
 curPiece: .word 4, 0x00ffff, 0, 4, 8, -4
-savedPiece: .word 4, 0x800080, 0, -4, 4, 40
+savedPiece: .word 4, 0, 0, -4, 4, 40
 rLSHAPE:
 	.word 4, 0x0000ff, 0, 4, 8, -40
 lLSHAPE:
@@ -87,6 +87,23 @@ ISHAPE:
 # Mutable Data
 ##############################################################################
 
+songLen: .word  288
+tetris_theme: .word 64, 59, 60, 62, 60, 59, 57, 57, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57,
+                     62, 66, 69, 67, 66, 64, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57,
+                     64, 59, 60, 62, 60, 59, 57, 57, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57,
+                     62, 66, 69, 67, 66, 64, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57
+
+tetris_durations: .word 4, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 4, 4, 4,
+                         4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4,
+                         4, 4, 2, 2, 2, 2, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 4, 4, 4,
+                         4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4
+
+tetris_sync: .word 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1,
+                     0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1,
+                     1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1,
+                     0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1
+
+
 Board: .word 0:200
 savedBoard: .word 0:200
 
@@ -97,8 +114,12 @@ savedPosY: .word 8
 posX: .word 16
 posY: .word 4
 savedUsed: .word 0
+rowsCleared: .word 0
 
 speed: .word 20
+songSpeed: .word 12
+songCount: .word 0
+noteCount: .word 0
 frameCount: .word 0
 keyboardBuffer: .word 
 
@@ -231,7 +252,16 @@ game_loop:
         lw $t1, 0($t0)
         la $t0, speed
         lw $t2, 0($t0)
-        bne $t2, $t1, End_Drop
+        
+        la $t3, rowsCleared
+        lw $t3, 0($t3)
+        
+        div $t4, $t3, 1
+        sub $t2, $t2, $t4
+        bge $t2, 5, valid_speed
+        li $t2, 5
+        valid_speed:
+        bge $t2, $t1, End_Drop
         Drop:
         	# lower the piece by one
         	# must put which shape to draw in $a1
@@ -245,6 +275,54 @@ game_loop:
 		addi $t1, $t1, 1
 		la $t0, frameCount
         	sw $t1, 0($t0)
+        
+        la $t0, songSpeed
+        lw $t0, 0($t0)
+        la $t1, songCount
+        lw $t1, 0($t1)
+        
+        bne $t1, $t0, inc_song_count
+        
+        la $t4, noteCount
+        lw $t5, 0($t4)
+
+        la $s0, tetris_theme
+        la $s1, tetris_durations
+        la $s2, tetris_sync
+        add $s0, $s0, $t5
+       	add $s1, $s1, $t5
+       	add $s2, $s2, $t5
+       	lw $s0, 0($s0)
+       	lw $s1, 0($s1)
+       	lw $s2, 0($s2)
+       	
+       	move $a0, $s0
+       	move $a1, $s1
+       	li $a2, 0
+       	li $a3, 64 
+       	mul $a1, $a1, 250
+       	beqz $s2, sync_note
+       	li $v0, 31
+       	j play_note
+       	sync_note: li $v0, 31
+       	play_note: syscall
+       	la $t6, songLen
+        lw $t6, 0($t6)
+        bne $t5, $t6, no_reset_song
+        li $t5, -4
+        no_reset_song:
+        addi $t5, $t5, 4
+        sw $t5, 0($t4)
+        la $t5, songCount
+        sw $zero, 0($t5)
+        j end_note
+        inc_song_count:
+        	addi $t1, $t1, 1
+        	la $t3, songCount
+        	sw $t1, 0($t3)
+        end_note:
+        
+        
         
         # should be 60 fps
 	# Sleep
@@ -314,12 +392,16 @@ save_piece:
     	j ret
 
 clear_line:
+	la $s0, rowsCleared
+	lw $s1, 0($s0)
+	addi $s1, $s1, 1
+	sw $s1, 0($s0)
 	la $s0, Board
 	lw $s1, 0($sp) # start of row to clear
 	addi $sp, $sp, 4
 	# t2 holds the # of coloured squares, it initially starts at 0 which
 	# causes this function to run
-
+	
 	j loop_delete
 	loop_delete:
 		beq $s0, $s1 , end_delete
