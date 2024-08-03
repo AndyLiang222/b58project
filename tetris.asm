@@ -97,7 +97,7 @@ tetris_durations: .word 4, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 4, 4, 4,
                          4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4,
                          4, 4, 2, 2, 2, 2, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 4, 4, 4,
                          4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4
-
+# doesn't matter since sync notes don't work well
 tetris_sync: .word 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1,
                      0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1,
                      1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1,
@@ -117,7 +117,7 @@ savedUsed: .word 0
 rowsCleared: .word 0
 
 speed: .word 20
-songSpeed: .word 12
+songSpeed: .word 16
 songCount: .word 0
 noteCount: .word 0
 frameCount: .word 0
@@ -276,19 +276,24 @@ game_loop:
 		la $t0, frameCount
         	sw $t1, 0($t0)
         
+        #--------------------------------------------
+        # Code to play song
+        #--------------------------------------------
+        
         la $t0, songSpeed
         lw $t0, 0($t0)
         la $t1, songCount
         lw $t1, 0($t1)
-        
+        # plays note based on song speed
         bne $t1, $t0, inc_song_count
-        
+        # index of current note
         la $t4, noteCount
         lw $t5, 0($t4)
-
+	# load the note, duration and sync
         la $s0, tetris_theme
         la $s1, tetris_durations
         la $s2, tetris_sync
+        # load the current note
         add $s0, $s0, $t5
        	add $s1, $s1, $t5
        	add $s2, $s2, $t5
@@ -296,27 +301,34 @@ game_loop:
        	lw $s1, 0($s1)
        	lw $s2, 0($s2)
        	
+       	# a0 = note, a1 = duration, a2 = instrument (0-8 is piano idk the difference), a3 = volume, 
        	move $a0, $s0
        	move $a1, $s1
-       	li $a2, 0
-       	li $a3, 64 
+       	li $a2, 2
+       	li $a3, 64
+       	# a1 takes in milliseconds => multiply by 250 milliseconds per unit of duration 
        	mul $a1, $a1, 250
+       	# this doesn't really do anything as sync note doesn't work well so I made it only use the syscall
+       	# for async notes
        	beqz $s2, sync_note
        	li $v0, 31
        	j play_note
        	sync_note: li $v0, 31
        	play_note: syscall
+       	# if reach the end of the song reset to beginning
        	la $t6, songLen
         lw $t6, 0($t6)
         bne $t5, $t6, no_reset_song
         li $t5, -4
         no_reset_song:
+        # shift to next note and reset the songCount
         addi $t5, $t5, 4
         sw $t5, 0($t4)
         la $t5, songCount
         sw $zero, 0($t5)
         j end_note
         inc_song_count:
+        	# increment the song count
         	addi $t1, $t1, 1
         	la $t3, songCount
         	sw $t1, 0($t3)
