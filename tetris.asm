@@ -88,15 +88,17 @@ ISHAPE:
 ##############################################################################
 
 songLen: .word  288
+
 tetris_theme: .word 64, 59, 60, 62, 60, 59, 57, 57, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57,
-                     62, 66, 69, 67, 66, 64, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57,
+                     62, 65, 69, 67, 65, 64, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57,
                      64, 59, 60, 62, 60, 59, 57, 57, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57,
-                     62, 66, 69, 67, 66, 64, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57
+                     62, 65, 69, 67, 65, 64, 60, 64, 62, 60, 59, 60, 62, 64, 60, 57, 57
 
 tetris_durations: .word 4, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 4, 4, 4,
                          4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4,
                          4, 4, 2, 2, 2, 2, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 4, 4, 4,
                          4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4
+
 # doesn't matter since sync notes don't work well
 tetris_sync: .word 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1,
                      0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1,
@@ -240,6 +242,12 @@ game_loop:
 	la $a0, curPiece
 	jal Draw_screen
 	
+	# should be 60 fps
+	# Sleep
+	li   $a0, 16          # Load the number of miliseconds to sleep into $a0
+    	li   $v0, 32          # Syscall number for sleep (32)
+    	syscall               # Make the syscall to sleep
+	
 	# READ A/D INPUT HRE
 
 	lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
@@ -335,12 +343,6 @@ game_loop:
         end_note:
         
         
-        
-        # should be 60 fps
-	# Sleep
-	li   $a0, 16          # Load the number of miliseconds to sleep into $a0
-    	li   $v0, 32          # Syscall number for sleep (32)
-    	syscall               # Make the syscall to sleep
 	
     	j game_loop
     	
