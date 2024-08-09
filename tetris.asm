@@ -1015,6 +1015,10 @@ Lower_shape:
 	
 	jal check_for_full_rows
 	
+	jal Check_Spawn_Collision
+	beqz $v0, End_Lower_Piece
+	j respond_to_q
+	
 	End_Lower_Piece:
 	
 	# get our $ra back
@@ -1100,6 +1104,36 @@ Check_Drop_Collision:
 	lw $ra, 0($sp)
 	addi $sp, $sp, 4
 	j ret
+
+Check_Spawn_Collision:
+	la $s0, curPiece
+	lw $s1, 0($s0)
+	addi $s2, $s0, 8
+	li $s7, 0
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	jal Get_Position
+	move $s3, $v0
+
+	Loop_Spawn_Piece:
+		beqz $s1, Loop_Spawn_Piece_End
+		lw $s4, 0($s2)
+		add $s5, $s3, $s4
+		
+		addi $sp, $sp, -4
+		sw $s5, 0($sp)
+		jal Check_Board_Collision
+		or $s7, $s7, $v0
+		
+		bnez $s7, Loop_Spawn_Piece_End
+		subi $s1, $s1, 1
+		addi $s2, $s2, 4
+		j Loop_Spawn_Piece
+	Loop_Spawn_Piece_End: add $v0, $zero, $s7
+	lw $ra, 0($sp)
+	addi $sp, $sp, 4
+	j ret
+	
 	
 
 Get_Position:
