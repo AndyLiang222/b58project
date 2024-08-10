@@ -33,7 +33,7 @@
 # C to save the current piece / to swap it back out
 # Everything else is normal tetris
 # Link to video demonstration for final submission:
-# - (insert YouTube / MyMedia / other URL here). Make sure we can view it!
+# - https://youtu.be/KQDbwbupPn0
 #
 # Are you OK with us sharing the video with people outside course staff?
 # - yes
