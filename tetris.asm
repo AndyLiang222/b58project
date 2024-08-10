@@ -4,10 +4,10 @@
 # Student2: Andy Liang, 1009847551, lianga34, andyyy.liang@mail.utoronto.ca
 #
 # Bitmap Display Configuration:
-# - Unit width in pixels: 8 (update this as needed) 
-# - Unit height in pixels: 8 (update this as needed)
-# - Display width in pixels: 256 (update this as needed)
-# - Display height in pixels: 256 (update this as needed)
+# - Unit width in pixels: 8 
+# - Unit height in pixels: 8 
+# - Display width in pixels: 256 
+# - Display height in pixels: 256 
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestones have been reached in this submission?
@@ -27,12 +27,16 @@
 # 2. Tetris Theme Song
 # ... (add more if necessary)
 # How to play:
-# (Include any instructions)
+# A and D to move the tetromino
+# S to move the tetromino downwards
+# Q to quit the game
+# C to save the current piece / to swap it back out
+# Everything else is normal tetris
 # Link to video demonstration for final submission:
 # - (insert YouTube / MyMedia / other URL here). Make sure we can view it!
 #
 # Are you OK with us sharing the video with people outside course staff?
-# - yes / no
+# - yes
 #
 # Any additional information that the TA needs to know:
 # - (write here, if any)
@@ -169,6 +173,7 @@ build_view:
 	# 2b. Update locations (paddle, ball)
 	# 3. Draw the screen
 	li $s7, 0x0000ff        # $s7 = blue
+	li $s3, 0xffffff        # $s3 = white
 	li $s6, 0x17161A	 # $s6 = dark grey
 	li $s5, 0x454545	 # $s5 = light grey
 	li $s4, 0x00ffff	 # $s5 = light blue
@@ -183,7 +188,7 @@ build_view:
 	addi $sp, $sp, -12
 	sw $s0, 8($sp)
 	sw $s2, 4($sp)
-	sw $s7, ($sp)
+	sw $s3, ($sp)
 	jal Draw_Col
 	
 	addi $s0, $s0,44
@@ -193,7 +198,7 @@ build_view:
 	addi $sp, $sp, -12
 	sw $s0, 8($sp)
 	sw $s2, 4($sp)
-	sw $s7, ($sp)
+	sw $s3, ($sp)
 	jal Draw_Col
 	
 	# draws the bottom edge of border
@@ -203,7 +208,7 @@ build_view:
 	addi $sp, $sp, -12
 	sw $s0, 8($sp)
 	sw $s1, 4($sp)
-	sw $s7, ($sp)
+	sw $s3, ($sp)
 	jal Draw_Row
 	
 	lw $s0, ADDR_DSPL       # $t0 = base address for display
@@ -214,7 +219,7 @@ build_view:
 	addi $sp, $sp, -12
 	sw $s0, 8($sp)
 	sw $s1, 4($sp)
-	sw $s7, ($sp)
+	sw $s3, ($sp)
 	jal Draw_Row
 	
 	addi $s0, $s0, 20
@@ -222,7 +227,7 @@ build_view:
 	addi $sp, $sp, -12
 	sw $s0, 8($sp)
 	sw $s2, 4($sp)
-	sw $s7, ($sp)
+	sw $s3, ($sp)
 	jal Draw_Col
 	
 	addi $s0, $s0, 748
@@ -230,7 +235,7 @@ build_view:
 	addi $sp, $sp, -12
 	sw $s0, 8($sp)
 	sw $s1, 4($sp)
-	sw $s7, ($sp)
+	sw $s3, ($sp)
 	jal Draw_Row
 	
 	j game_loop
